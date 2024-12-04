@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>叮咚图片上传</title>
+    <link rel="stylesheet" href="https://res.wx.qq.com/open/libs/weui/2.4.4/weui.min.css">
+    <style>
+        body {
+            background-color: #f1f1f1;
+            color: #333;
+            font-family: "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+        }
+        .container {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .main-content {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #drop-area {
+            border: 2px dashed #e60000;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #drop-area:hover {
+            background-color: #fff0f0;
+        }
+        #drop-area.dragover {
+            background-color: #fff0f0;
+            box-shadow: inset 0 0 10px rgba(230,0,0,0.3);
+        }
+        .thumb {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            margin: 5px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .weui-btn {
+            font-weight: bold;
+        }
+        .weui-btn_warn {
+            background-color: #fff;
+            color: #e64340;
+            border: 1px solid #e64340;
+        }
+        .weui-cell {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+        }
+        .weui-cell__bd {
+            flex: 1;
+        }
+        .weui-cell__ft {
+            margin-left: 10px;
+        }
+        .weui-input {
+            border: none;
+            background-color: transparent;
+            padding: 5px 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .button-container {
+            display: flex;
+            gap: 20px; 
+        }
+        .button-container .weui-flex__item {
+            flex: 1;
+        }
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+            .main-content {
+                padding: 20px;
+            }
+            #drop-area {
+                padding: 20px;
+            }
+            .thumb {
+                width: 60px;
+                height: 60px;
+            }
+            .weui-cell {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .weui-cell__ft {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+            .weui-btn_mini {
+                width: 100%;
+            }
+            .button-container {
+                flex-direction: column;
+                gap: 10px; 
+            }
+            .button-container .weui-flex__item {
+                width: 100%; 
+            }
+        }
+        .code-tabs {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 10px;
+        }
+        .code-tab {
+            padding: 5px 10px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .code-tab.active {
+            border-bottom-color: #e60000;
+        }
+        .code-content {
+            display: none;
+        }
+        .code-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <h2 class="weui-panel__hd" style="text-align: center; margin-bottom: 20px;">叮咚图片上传</h2>
+            <div id="drop-area" class="weui-cells weui-cells_form">
+                <div>
+                    <p>拖放图片到此处或点击选择文件</p>
+                    <p>也可以直接粘贴图片</p>
+                    <p>最多可同时上传10张图片</p>
+                </div>
+                <input type="file" id="fileElem" multiple accept="image/*" style="display:none">
+                <div id="thumb-container"></div>
+            </div>
+            <div class="button-container">
+                <div class="weui-flex__item">
+                    <a href="javascript:" id="upload-btn" class="weui-btn weui-btn_primary">开始上传</a>
+                </div>
+                <div class="weui-flex__item">
+                    <a href="javascript:" id="clear-btn" class="weui-btn weui-btn_warn">清除所有</a>
+                </div>
+            </div>
+            <div id="result-container"></div>
+        </div>
+    </div>
+
+    <script src="https://res.wx.qq.com/open/libs/weuijs/1.2.1/weui.min.js"></script>
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const fileElem = document.getElementById('fileElem');
+        const thumbContainer = document.getElementById('thumb-container');
+        const resultContainer = document.getElementById('result-container');
+        const uploadBtn = document.getElementById('upload-btn');
+        const clearBtn = document.getElementById('clear-btn');
+
+        let filesToUpload = [];
+
+        uploadBtn.addEventListener('click', () => {
+            if (filesToUpload.length === 0) {
+                weui.topTips('请选择文件后再上传', 2000);
+                return;
+            }
+            uploadFiles();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            thumbContainer.innerHTML = '';
+            resultContainer.innerHTML = '';
+            filesToUpload = [];
+            weui.toast('已清除', 1000);
+        });
+
+        dropArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('dragover');
+        });
+
+        dropArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropArea.classList.remove('dragover');
+            const files = Array.from(event.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            handleFiles(files);
+        });
+
+        dropArea.addEventListener('click', () => {
+            fileElem.click();
+        });
+
+        fileElem.addEventListener('change', () => {
+            handleFiles(Array.from(fileElem.files));
+        });
+
+        document.addEventListener('paste', (event) => {
+            const items = event.clipboardData.items;
+            const files = [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    files.push(blob);
+                }
+            }
+            handleFiles(files);
+        });
+
+        function handleFiles(files) {
+            for (let file of files) {
+                if (filesToUpload.length >= 10) {
+                    weui.topTips('最多只能上传10张图片', 3000);
+                    break;
+                }
+                if (!file.type.startsWith('image/')) {
+                    weui.topTips('只允许上传图片文件', 3000);
+                    continue;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const img = document.createElement('img');
+                    img.src = reader.result;
+                    img.classList.add('thumb');
+                    thumbContainer.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+                filesToUpload.push(file);
+            }
+        }
+
+        function uploadFiles() {
+            const totalFiles = filesToUpload.length;
+            let uploadedFiles = 0;
+            
+            const loadingTip = weui.loading('文件上传中...');
+
+            const uploadPromises = filesToUpload.map((file, index) => {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                return fetch('upload.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayResult(data.url);
+                        uploadedFiles++;
+                        weui.toast(`已上传 ${uploadedFiles}/${totalFiles}`, 500);
+                    } else {
+                        weui.topTips(`文件 ${index + 1} 上传失败: ${data.msg}`, 500);
+                    }
+                })
+                .catch(error => {
+                    weui.topTips(`文件 ${index + 1} 上传失败: ${error.message}`, 500);
+                });
+            });
+
+            Promise.all(uploadPromises)
+                .then(() => {
+                    loadingTip.hide();
+                    weui.toast('全部上传完成', 500);
+                });
+        }
+
+        function displayResult(imgUrl) {
+            const resultItem = document.createElement('div');
+            resultItem.classList.add('weui-cell');
+
+            const cellBody = document.createElement('div');
+            cellBody.classList.add('weui-cell__bd');
+
+            const codeTabs = document.createElement('div');
+            codeTabs.classList.add('code-tabs');
+            ['URL', 'UBB', 'Markdown', 'HTML'].forEach((tabName, index) => {
+                const tab = document.createElement('div');
+                tab.classList.add('code-tab');
+                tab.textContent = tabName;
+                tab.addEventListener('click', () => switchTab(resultItem, index));
+                codeTabs.appendChild(tab);
+            });
+            cellBody.appendChild(codeTabs);
+
+            const codeContents = [
+                imgUrl,
+                `[img]${imgUrl}[/img]`,
+                `![image](${imgUrl})`,
+                `<img src="${imgUrl}" alt="image">`
+            ];
+
+            codeContents.forEach((content, index) => {
+                const codeContent = document.createElement('div');
+                codeContent.classList.add('code-content');
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = content;
+                input.readOnly = true;
+                input.classList.add('weui-input');
+                codeContent.appendChild(input);
+                cellBody.appendChild(codeContent);
+            });
+
+            const copyButton = document.createElement('a');
+            copyButton.classList.add('weui-btn', 'weui-btn_mini', 'weui-btn_primary');
+            copyButton.textContent = '复制';
+            copyButton.addEventListener('click', () => {
+                const activeInput = resultItem.querySelector('.code-content.active input');
+                activeInput.select();
+                document.execCommand('copy');
+                weui.toast('已复制', 1000);
+            });
+
+            const cellFoot = document.createElement('div');
+            cellFoot.classList.add('weui-cell__ft');
+            cellFoot.appendChild(copyButton);
+
+            resultItem.appendChild(cellBody);
+            resultItem.appendChild(cellFoot);
+            resultContainer.appendChild(resultItem);
+
+            switchTab(resultItem, 0);
+        }
+
+        function switchTab(resultItem, activeIndex) {
+            const tabs = resultItem.querySelectorAll('.code-tab');
+            const contents = resultItem.querySelectorAll('.code-content');
+            
+            tabs.forEach((tab, index) => {
+                if (index === activeIndex) {
+                    tab.classList.add('active');
+                    contents[index].classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                    contents[index].classList.remove('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
